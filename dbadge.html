@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Bot</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+</head>
+<body>
+    <h1>Bot Control Panel</h1>
+    <p>Enter Bot Token to Start:</p>
+    <input type="text" id="botTokenInput" placeholder="Enter bot token here" />
+    <button id="startBotButton">Start Bot</button>
+
+    <h2>Queue Status:</h2>
+    <div id="queue"></div>
+
+    <h3>Status:</h3>
+    <p id="status"></p>
+    <p id="nextTurn"></p>
+
+    <script>
+        // Initialize Firebase
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        const app = firebase.initializeApp(firebaseConfig);
+        const database = firebase.database(app);
+
+        const startBotButton = document.getElementById('startBotButton');
+        const statusElement = document.getElementById('status');
+        const nextTurnElement = document.getElementById('nextTurn');
+        const queueElement = document.getElementById('queue');
+        const botTokenInput = document.getElementById('botTokenInput');
+
+        let userQueue = [];
+
+        // Fetch current queue from Firebase
+        function fetchQueue() {
+            database.ref('queue').on('value', (snapshot) => {
+                userQueue = snapshot.val() || [];
+                updateQueueDisplay();
+            });
+        }
+
+        // Update queue display
+        function updateQueueDisplay() {
+            let queueText = 'Queue: ';
+            userQueue.forEach((user, index) => {
+                queueText += `${user.name} (Turn: ${index + 1}), `;
+            });
+            queueElement.textContent = queueText;
+        }
+
+        // Add user to the queue
+        startBotButton.addEventListener('click', async () => {
+            const token = botTokenInput.value;
+
+            if (!token) {
+                statusElement.textContent = "Please enter a bot token!";
+                return;
+            }
+
+            // Get current user (just for demo purposes, using a random name)
+            const currentUser = { name: `User_${Math.floor(Math.random() * 1000)}` };
+
+            // Add user to the queue
+            await firebase.database().ref('queue').push(currentUser);
+
+            // Set the status to waiting
+            statusElement.textContent = `${currentUser.name} is waiting...`;
+
+            // Check the position in the queue
+            const userIndex = userQueue.findIndex(user => user.name === currentUser.name);
+            nextTurnElement.textContent = `Your turn will be in ${userIndex * 5} minutes`;
+
+            // Trigger Firebase function to start bot when it reaches the front of the queue
+            firebase.database().ref('queueStatus').set({
+                status: 'waiting',
+                token: token,
+                user: currentUser,
+            });
+        });
+
+        // Listen for bot status updates
+        firebase.database().ref('botStatus').on('value', (snapshot) => {
+            const botStatus = snapshot.val();
+
+            if (botStatus && botStatus.status === 'running') {
+                statusElement.textContent = "Bot is running for 5 minutes...";
+                nextTurnElement.textContent = "Please wait for your turn.";
+            } else if (botStatus && botStatus.status === 'stopped') {
+                statusElement.textContent = "Bot has stopped.";
+            }
+        });
+
+        // Start queue listening
+        fetchQueue();
+
+    </script>
+</body>
+</html>
